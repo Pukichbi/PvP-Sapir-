@@ -8,12 +8,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Найти папку проекта
+      - name: Распаковать zip и найти проект
         run: |
-          P=$(find . -name package.json -not -path '*/node_modules/*' | head -1)
+          Z=$(find . -iname '*.zip' -not -path './project/*' | head -1)
+          if [ -n "$Z" ]; then
+            echo "Нашёл архив: $Z"
+            mkdir -p project
+            unzip -q -o "$Z" -d project
+          else
+            echo "Архива нет, ищу проект в самом репозитории"
+            mkdir -p project
+            cp -r . project/ 2>/dev/null || true
+          fi
+          P=$(find project -name package.json -not -path '*/node_modules/*' | head -1)
           if [ -z "$P" ]; then
-            echo "::error::package.json не найден в репозитории. Загрузите файлы проекта."
-            ls -R
+            echo "::error::package.json не найден ни в репозитории, ни в zip-архиве"
+            ls -R | head -50
             exit 1
           fi
           echo "DIR=$(dirname "$P")" >> "$GITHUB_ENV"
@@ -36,6 +46,9 @@ jobs:
 
       - name: Иконки
         run: cd "$DIR" && npx capacitor-assets generate --android --iconBackgroundColor '#14121c' --iconBackgroundColorDark '#14121c'
+
+      - name: Портретная ориентация
+        run: cd "$DIR" && sed -i 's/<activity/<activity android:screenOrientation="portrait"/' android/app/src/main/AndroidManifest.xml
 
       - name: Синхронизация
         run: cd "$DIR" && npx cap sync android
